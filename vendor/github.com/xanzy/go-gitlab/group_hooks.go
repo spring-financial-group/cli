@@ -46,6 +46,7 @@ type GroupHook struct {
 	EnableSSLVerification    bool       `json:"enable_ssl_verification"`
 	AlertStatus              string     `json:"alert_status"`
 	CreatedAt                *time.Time `json:"created_at"`
+	CustomWebhookTemplate    string     `json:"custom_webhook_template"`
 }
 
 // ListGroupHooksOptions represents the available ListGroupHooks() options.
@@ -73,7 +74,7 @@ func (s *GroupsService) ListGroupHooks(gid interface{}, opt *ListGroupHooksOptio
 		return nil, resp, err
 	}
 
-	return gh, resp, err
+	return gh, resp, nil
 }
 
 // GetGroupHook gets a specific hook for a group.
@@ -98,7 +99,7 @@ func (s *GroupsService) GetGroupHook(pid interface{}, hook int, options ...Reque
 		return nil, resp, err
 	}
 
-	return gh, resp, err
+	return gh, resp, nil
 }
 
 // AddGroupHookOptions represents the available AddGroupHook() options.
@@ -122,6 +123,7 @@ type AddGroupHookOptions struct {
 	SubGroupEvents           *bool   `url:"subgroup_events,omitempty" json:"subgroup_events,omitempty"`
 	EnableSSLVerification    *bool   `url:"enable_ssl_verification,omitempty"  json:"enable_ssl_verification,omitempty"`
 	Token                    *string `url:"token,omitempty" json:"token,omitempty"`
+	CustomWebhookTemplate    *string `url:"custom_webhook_template,omitempty" json:"custom_webhook_template,omitempty"`
 }
 
 // AddGroupHook create a new group scoped webhook.
@@ -145,7 +147,7 @@ func (s *GroupsService) AddGroupHook(gid interface{}, opt *AddGroupHookOptions, 
 		return nil, resp, err
 	}
 
-	return gh, resp, err
+	return gh, resp, nil
 }
 
 // EditGroupHookOptions represents the available EditGroupHook() options.
@@ -170,6 +172,7 @@ type EditGroupHookOptions struct {
 	SubGroupEvents           *bool   `url:"subgroup_events,omitempty" json:"subgroup_events,omitempty"`
 	EnableSSLVerification    *bool   `url:"enable_ssl_verification,omitempty" json:"enable_ssl_verification,omitempty"`
 	Token                    *string `url:"token,omitempty" json:"token,omitempty"`
+	CustomWebhookTemplate    *string `url:"custom_webhook_template,omitempty" json:"custom_webhook_template,omitempty"`
 }
 
 // EditGroupHook edits a hook for a specified group.
@@ -194,7 +197,7 @@ func (s *GroupsService) EditGroupHook(pid interface{}, hook int, opt *EditGroupH
 		return nil, resp, err
 	}
 
-	return gh, resp, err
+	return gh, resp, nil
 }
 
 // DeleteGroupHook removes a hook from a group. This is an idempotent

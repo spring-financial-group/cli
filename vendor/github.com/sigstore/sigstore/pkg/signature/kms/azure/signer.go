@@ -59,22 +59,15 @@ type SignerVerifier struct {
 // LoadSignerVerifier generates signatures using the specified key in Azure Key Vault and hash algorithm.
 //
 // It also can verify signatures locally using the public key. hashFunc must not be crypto.Hash(0).
-func LoadSignerVerifier(defaultCtx context.Context, referenceStr string, hashFunc crypto.Hash) (*SignerVerifier, error) {
+func LoadSignerVerifier(defaultCtx context.Context, referenceStr string) (*SignerVerifier, error) {
 	a := &SignerVerifier{
 		defaultCtx: defaultCtx,
 	}
 
 	var err error
-	a.client, err = newAzureKMS(defaultCtx, referenceStr)
+	a.client, err = newAzureKMS(referenceStr)
 	if err != nil {
 		return nil, err
-	}
-
-	switch hashFunc {
-	case 0, crypto.SHA224, crypto.SHA256, crypto.SHA384, crypto.SHA512:
-		a.hashFunc = hashFunc
-	default:
-		return nil, errors.New("hash function not supported by Azure Key Vault")
 	}
 
 	return a, nil
@@ -94,21 +87,23 @@ func LoadSignerVerifier(defaultCtx context.Context, referenceStr string, hashFun
 //
 // All other options are ignored if specified.
 func (a *SignerVerifier) SignMessage(message io.Reader, opts ...signature.SignOption) ([]byte, error) {
-	ctx := context.Background()
 	var digest []byte
-	var signerOpts crypto.SignerOpts = a.hashFunc
 
 	for _, opt := range opts {
 		opt.ApplyDigest(&digest)
-		opt.ApplyCryptoSignerOpts(&signerOpts)
 	}
 
-	digest, _, err := signature.ComputeDigestForSigning(message, signerOpts.HashFunc(), azureSupportedHashFuncs, opts...)
+	hashFunc, _, err := a.client.getKeyVaultHashFunc(a.defaultCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	rawSig, err := a.client.sign(ctx, digest, a.hashFunc)
+	digest, _, err = signature.ComputeDigestForSigning(message, hashFunc, azureSupportedHashFuncs, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	rawSig, err := a.client.sign(a.defaultCtx, digest)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +136,18 @@ func (a *SignerVerifier) SignMessage(message io.Reader, opts ...signature.SignOp
 //
 // All other options are ignored if specified.
 func (a *SignerVerifier) VerifySignature(sig, message io.Reader, opts ...signature.VerifyOption) error {
-	ctx := context.Background()
+	hashFunc, _, err := a.client.getKeyVaultHashFunc(a.defaultCtx)
+	if err != nil {
+		return err
+	}
+
 	var digest []byte
-	var signerOpts crypto.SignerOpts = a.hashFunc
+	var signerOpts crypto.SignerOpts = hashFunc
 	for _, opt := range opts {
 		opt.ApplyDigest(&digest)
 	}
 
-	digest, _, err := signature.ComputeDigestForVerifying(message, signerOpts.HashFunc(), azureSupportedHashFuncs, opts...)
+	digest, _, err = signature.ComputeDigestForVerifying(message, signerOpts.HashFunc(), azureSupportedHashFuncs, opts...)
 	if err != nil {
 		return err
 	}
@@ -176,13 +175,13 @@ func (a *SignerVerifier) VerifySignature(sig, message io.Reader, opts ...signatu
 	rawSigBytes := []byte{}
 	rawSigBytes = append(rawSigBytes, r.Bytes()...)
 	rawSigBytes = append(rawSigBytes, s.Bytes()...)
-	return a.client.verify(ctx, rawSigBytes, digest, a.hashFunc)
+	return a.client.verify(a.defaultCtx, rawSigBytes, digest)
 }
 
 // PublicKey returns the public key that can be used to verify signatures created by
 // this signer. All options provided in arguments to this method are ignored.
 func (a *SignerVerifier) PublicKey(_ ...signature.PublicKeyOption) (crypto.PublicKey, error) {
-	return a.client.public(context.Background())
+	return a.client.public(a.defaultCtx)
 }
 
 // CreateKey attempts to create a new key in Vault with the specified algorithm.
@@ -222,14 +221,19 @@ func (c cryptoSignerWrapper) Sign(_ io.Reader, digest []byte, opts crypto.Signer
 // CryptoSigner returns a crypto.Signer object that uses the underlying SignerVerifier, along with a crypto.SignerOpts object
 // that allows the KMS to be used in APIs that only accept the standard golang objects
 func (a *SignerVerifier) CryptoSigner(ctx context.Context, errFunc func(error)) (crypto.Signer, crypto.SignerOpts, error) {
+	hashFunc, _, err := a.client.getKeyVaultHashFunc(a.defaultCtx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	csw := &cryptoSignerWrapper{
 		ctx:      ctx,
 		sv:       a,
-		hashFunc: a.hashFunc,
+		hashFunc: hashFunc,
 		errFunc:  errFunc,
 	}
 
-	return csw, a.hashFunc, nil
+	return csw, hashFunc, nil
 }
 
 // SupportedAlgorithms returns the list of algorithms supported by the Azure KMS service

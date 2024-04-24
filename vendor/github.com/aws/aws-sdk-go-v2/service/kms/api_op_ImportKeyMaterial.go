@@ -4,48 +4,76 @@ package kms
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
-// Imports key material into an existing symmetric encryption KMS key that was
-// created without key material. After you successfully import key material into a
-// KMS key, you can reimport the same key material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html#reimport-key-material)
-// into that KMS key, but you cannot import different key material. You cannot
-// perform this operation on an asymmetric KMS key, an HMAC KMS key, or on any KMS
-// key in a different Amazon Web Services account. For more information about
-// creating KMS keys with no key material and then importing key material, see
-// Importing Key Material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html)
-// in the Key Management Service Developer Guide. Before using this operation, call
-// GetParametersForImport . Its response includes a public key and an import token.
-// Use the public key to encrypt the key material. Then, submit the import token
-// from the same GetParametersForImport response. When calling this operation, you
-// must specify the following values:
-//   - The key ID or key ARN of a KMS key with no key material. Its Origin must be
-//     EXTERNAL . To create a KMS key with no key material, call CreateKey and set
-//     the value of its Origin parameter to EXTERNAL . To get the Origin of a KMS
-//     key, call DescribeKey .)
-//   - The encrypted key material. To get the public key to encrypt the key
-//     material, call GetParametersForImport .
+// Imports or reimports key material into an existing KMS key that was created
+// without key material. ImportKeyMaterial also sets the expiration model and
+// expiration date of the imported key material. By default, KMS keys are created
+// with key material that KMS generates. This operation supports Importing key
+// material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html)
+// , an advanced feature that lets you generate and import the cryptographic key
+// material for a KMS key. For more information about importing key material into
+// KMS, see Importing key material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html)
+// in the Key Management Service Developer Guide. After you successfully import key
+// material into a KMS key, you can reimport the same key material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html#reimport-key-material)
+// into that KMS key, but you cannot import different key material. You might
+// reimport key material to replace key material that expired or key material that
+// you deleted. You might also reimport key material to change the expiration model
+// or expiration date of the key material. Each time you import key material into
+// KMS, you can determine whether ( ExpirationModel ) and when ( ValidTo ) the key
+// material expires. To change the expiration of your key material, you must import
+// it again, either by calling ImportKeyMaterial or using the import features of
+// the KMS console. Before calling ImportKeyMaterial :
+//   - Create or identify a KMS key with no key material. The KMS key must have an
+//     Origin value of EXTERNAL , which indicates that the KMS key is designed for
+//     imported key material. To create an new KMS key for imported key material, call
+//     the CreateKey operation with an Origin value of EXTERNAL . You can create a
+//     symmetric encryption KMS key, HMAC KMS key, asymmetric encryption KMS key, or
+//     asymmetric signing KMS key. You can also import key material into a
+//     multi-Region key of any supported type. However, you can't import key material
+//     into a KMS key in a custom key store .
+//   - Use the DescribeKey operation to verify that the KeyState of the KMS key is
+//     PendingImport , which indicates that the KMS key has no key material. If you
+//     are reimporting the same key material into an existing KMS key, you might need
+//     to call the DeleteImportedKeyMaterial to delete its existing key material.
+//   - Call the GetParametersForImport operation to get a public key and import
+//     token set for importing key material.
+//   - Use the public key in the GetParametersForImport response to encrypt your
+//     key material.
+//
+// Then, in an ImportKeyMaterial request, you submit your encrypted key material
+// and import token. When calling this operation, you must specify the following
+// values:
+//   - The key ID or key ARN of the KMS key to associate with the imported key
+//     material. Its Origin must be EXTERNAL and its KeyState must be PendingImport .
+//     You cannot perform this operation on a KMS key in a custom key store , or on a
+//     KMS key in a different Amazon Web Services account. To get the Origin and
+//     KeyState of a KMS key, call DescribeKey .
+//   - The encrypted key material.
 //   - The import token that GetParametersForImport returned. You must use a public
 //     key and token from the same GetParametersForImport response.
 //   - Whether the key material expires ( ExpirationModel ) and, if so, when (
-//     ValidTo ). If you set an expiration date, on the specified date, KMS deletes
-//     the key material from the KMS key, making the KMS key unusable. To use the KMS
-//     key in cryptographic operations again, you must reimport the same key material.
-//     The only way to change the expiration model or expiration date is by reimporting
-//     the same key material and specifying a new expiration date.
+//     ValidTo ). For help with this choice, see Setting an expiration time (https://docs.aws.amazon.com/en_us/kms/latest/developerguide/importing-keys.html#importing-keys-expiration)
+//     in the Key Management Service Developer Guide. If you set an expiration date,
+//     KMS deletes the key material from the KMS key on the specified date, making the
+//     KMS key unusable. To use the KMS key in cryptographic operations again, you must
+//     reimport the same key material. However, you can delete and reimport the key
+//     material at any time, including before the key material expires. Each time you
+//     reimport, you can eliminate or reset the expiration time.
 //
 // When this operation is successful, the key state of the KMS key changes from
-// PendingImport to Enabled , and you can use the KMS key. If this operation fails,
-// use the exception to help determine the problem. If the error is related to the
-// key material, the import token, or wrapping key, use GetParametersForImport to
-// get a new public key and import token for the KMS key and repeat the import
-// procedure. For help, see How To Import Key Material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html#importing-keys-overview)
+// PendingImport to Enabled , and you can use the KMS key in cryptographic
+// operations. If this operation fails, use the exception to help determine the
+// problem. If the error is related to the key material, the import token, or
+// wrapping key, use GetParametersForImport to get a new public key and import
+// token for the KMS key and repeat the import procedure. For help, see How To
+// Import Key Material (https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys.html#importing-keys-overview)
 // in the Key Management Service Developer Guide. The KMS key that you use for this
 // operation must be in a compatible key state. For details, see Key states of KMS
 // keys (https://docs.aws.amazon.com/kms/latest/developerguide/key-state.html) in
@@ -55,6 +83,10 @@ import (
 // (key policy) Related operations:
 //   - DeleteImportedKeyMaterial
 //   - GetParametersForImport
+//
+// Eventual consistency: The KMS API follows an eventual consistency model. For
+// more information, see KMS eventual consistency (https://docs.aws.amazon.com/kms/latest/developerguide/programming-eventual-consistency.html)
+// .
 func (c *Client) ImportKeyMaterial(ctx context.Context, params *ImportKeyMaterialInput, optFns ...func(*Options)) (*ImportKeyMaterialOutput, error) {
 	if params == nil {
 		params = &ImportKeyMaterialInput{}
@@ -72,7 +104,7 @@ func (c *Client) ImportKeyMaterial(ctx context.Context, params *ImportKeyMateria
 
 type ImportKeyMaterialInput struct {
 
-	// The encrypted key material to import. The key material must be encrypted with
+	// The encrypted key material to import. The key material must be encrypted under
 	// the public wrapping key that GetParametersForImport returned, using the
 	// wrapping algorithm that you specified in the same GetParametersForImport
 	// request.
@@ -87,13 +119,15 @@ type ImportKeyMaterialInput struct {
 	// This member is required.
 	ImportToken []byte
 
-	// The identifier of the symmetric encryption KMS key that receives the imported
-	// key material. This must be the same KMS key specified in the KeyID parameter of
-	// the corresponding GetParametersForImport request. The Origin of the KMS key
-	// must be EXTERNAL . You cannot perform this operation on an asymmetric KMS key,
-	// an HMAC KMS key, a KMS key in a custom key store, or on a KMS key in a different
-	// Amazon Web Services account Specify the key ID or key ARN of the KMS key. For
-	// example:
+	// The identifier of the KMS key that will be associated with the imported key
+	// material. This must be the same KMS key specified in the KeyID parameter of the
+	// corresponding GetParametersForImport request. The Origin of the KMS key must be
+	// EXTERNAL and its KeyState must be PendingImport . The KMS key can be a symmetric
+	// encryption KMS key, HMAC KMS key, asymmetric encryption KMS key, or asymmetric
+	// signing KMS key, including a multi-Region key of any supported type. You cannot
+	// perform this operation on a KMS key in a custom key store, or on a KMS key in a
+	// different Amazon Web Services account. Specify the key ID or key ARN of the KMS
+	// key. For example:
 	//   - Key ID: 1234abcd-12ab-34cd-56ef-1234567890ab
 	//   - Key ARN:
 	//   arn:aws:kms:us-east-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab
@@ -103,12 +137,13 @@ type ImportKeyMaterialInput struct {
 	KeyId *string
 
 	// Specifies whether the key material expires. The default is KEY_MATERIAL_EXPIRES
-	// . When the value of ExpirationModel is KEY_MATERIAL_EXPIRES , you must specify a
-	// value for the ValidTo parameter. When value is KEY_MATERIAL_DOES_NOT_EXPIRE ,
-	// you must omit the ValidTo parameter. You cannot change the ExpirationModel or
-	// ValidTo values for the current import after the request completes. To change
-	// either value, you must delete ( DeleteImportedKeyMaterial ) and reimport the key
-	// material.
+	// . For help with this choice, see Setting an expiration time (https://docs.aws.amazon.com/en_us/kms/latest/developerguide/importing-keys.html#importing-keys-expiration)
+	// in the Key Management Service Developer Guide. When the value of ExpirationModel
+	// is KEY_MATERIAL_EXPIRES , you must specify a value for the ValidTo parameter.
+	// When value is KEY_MATERIAL_DOES_NOT_EXPIRE , you must omit the ValidTo
+	// parameter. You cannot change the ExpirationModel or ValidTo values for the
+	// current import after the request completes. To change either value, you must
+	// reimport the key material.
 	ExpirationModel types.ExpirationModelType
 
 	// The date and time when the imported key material expires. This parameter is
@@ -134,6 +169,9 @@ type ImportKeyMaterialOutput struct {
 }
 
 func (c *Client) addOperationImportKeyMaterialMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpImportKeyMaterial{}, middleware.After)
 	if err != nil {
 		return err
@@ -142,34 +180,38 @@ func (c *Client) addOperationImportKeyMaterialMiddlewares(stack *middleware.Stac
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ImportKeyMaterial"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -178,10 +220,16 @@ func (c *Client) addOperationImportKeyMaterialMiddlewares(stack *middleware.Stac
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = addOpImportKeyMaterialValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opImportKeyMaterial(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -193,6 +241,9 @@ func (c *Client) addOperationImportKeyMaterialMiddlewares(stack *middleware.Stac
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -200,7 +251,6 @@ func newServiceMetadataMiddleware_opImportKeyMaterial(region string) *awsmiddlew
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "kms",
 		OperationName: "ImportKeyMaterial",
 	}
 }

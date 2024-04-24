@@ -4,8 +4,8 @@ package kms
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -16,7 +16,7 @@ import (
 // the private key that is encrypted under the symmetric encryption KMS key you
 // specify. You can use the data key pair to perform asymmetric cryptography and
 // implement digital signatures outside of KMS. The bytes in the keys are random;
-// they not related to the caller or to the KMS key that is used to encrypt the
+// they are not related to the caller or to the KMS key that is used to encrypt the
 // private key. You can use the public key that GenerateDataKeyPair returns to
 // encrypt data or verify a signature outside of KMS. Then, store the encrypted
 // private key with the data. When you are ready to decrypt data or sign a message,
@@ -41,12 +41,26 @@ import (
 // caller or the KMS key that is used to encrypt the private key. The public key is
 // a DER-encoded X.509 SubjectPublicKeyInfo, as specified in RFC 5280 (https://tools.ietf.org/html/rfc5280)
 // . The private key is a DER-encoded PKCS8 PrivateKeyInfo, as specified in RFC
-// 5958 (https://tools.ietf.org/html/rfc5958) . You can use an optional encryption
-// context to add additional security to the encryption operation. If you specify
-// an EncryptionContext , you must specify the same encryption context (a
-// case-sensitive exact match) when decrypting the encrypted data key. Otherwise,
-// the request to decrypt fails with an InvalidCiphertextException . For more
-// information, see Encryption Context (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#encrypt_context)
+// 5958 (https://tools.ietf.org/html/rfc5958) . GenerateDataKeyPair also supports
+// Amazon Web Services Nitro Enclaves (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/nitro-enclave.html)
+// , which provide an isolated compute environment in Amazon EC2. To call
+// GenerateDataKeyPair for an Amazon Web Services Nitro enclave, use the Amazon
+// Web Services Nitro Enclaves SDK (https://docs.aws.amazon.com/enclaves/latest/user/developing-applications.html#sdk)
+// or any Amazon Web Services SDK. Use the Recipient parameter to provide the
+// attestation document for the enclave. GenerateDataKeyPair returns the public
+// data key and a copy of the private data key encrypted under the specified KMS
+// key, as usual. But instead of a plaintext copy of the private data key (
+// PrivateKeyPlaintext ), the response includes a copy of the private data key
+// encrypted under the public key from the attestation document (
+// CiphertextForRecipient ). For information about the interaction between KMS and
+// Amazon Web Services Nitro Enclaves, see How Amazon Web Services Nitro Enclaves
+// uses KMS (https://docs.aws.amazon.com/kms/latest/developerguide/services-nitro-enclaves.html)
+// in the Key Management Service Developer Guide.. You can use an optional
+// encryption context to add additional security to the encryption operation. If
+// you specify an EncryptionContext , you must specify the same encryption context
+// (a case-sensitive exact match) when decrypting the encrypted data key.
+// Otherwise, the request to decrypt fails with an InvalidCiphertextException . For
+// more information, see Encryption Context (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#encrypt_context)
 // in the Key Management Service Developer Guide. The KMS key that you use for this
 // operation must be in a compatible key state. For details, see Key states of KMS
 // keys (https://docs.aws.amazon.com/kms/latest/developerguide/key-state.html) in
@@ -60,6 +74,10 @@ import (
 //   - GenerateDataKey
 //   - GenerateDataKeyPairWithoutPlaintext
 //   - GenerateDataKeyWithoutPlaintext
+//
+// Eventual consistency: The KMS API follows an eventual consistency model. For
+// more information, see KMS eventual consistency (https://docs.aws.amazon.com/kms/latest/developerguide/programming-eventual-consistency.html)
+// .
 func (c *Client) GenerateDataKeyPair(ctx context.Context, params *GenerateDataKeyPairInput, optFns ...func(*Options)) (*GenerateDataKeyPairOutput, error) {
 	if params == nil {
 		params = &GenerateDataKeyPairInput{}
@@ -104,15 +122,21 @@ type GenerateDataKeyPairInput struct {
 	// This member is required.
 	KeyPairSpec types.DataKeyPairSpec
 
+	// Checks if your request will succeed. DryRun is an optional parameter. To learn
+	// more about how to use this parameter, see Testing your KMS API calls (https://docs.aws.amazon.com/kms/latest/developerguide/programming-dryrun.html)
+	// in the Key Management Service Developer Guide.
+	DryRun *bool
+
 	// Specifies the encryption context that will be used when encrypting the private
-	// key in the data key pair. An encryption context is a collection of non-secret
-	// key-value pairs that represent additional authenticated data. When you use an
-	// encryption context to encrypt data, you must specify the same (an exact
-	// case-sensitive match) encryption context to decrypt the data. An encryption
-	// context is supported only on operations with symmetric encryption KMS keys. On
-	// operations with symmetric encryption KMS keys, an encryption context is
-	// optional, but it is strongly recommended. For more information, see Encryption
-	// context (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#encrypt_context)
+	// key in the data key pair. Do not include confidential or sensitive information
+	// in this field. This field may be displayed in plaintext in CloudTrail logs and
+	// other output. An encryption context is a collection of non-secret key-value
+	// pairs that represent additional authenticated data. When you use an encryption
+	// context to encrypt data, you must specify the same (an exact case-sensitive
+	// match) encryption context to decrypt the data. An encryption context is
+	// supported only on operations with symmetric encryption KMS keys. On operations
+	// with symmetric encryption KMS keys, an encryption context is optional, but it is
+	// strongly recommended. For more information, see Encryption context (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#encrypt_context)
 	// in the Key Management Service Developer Guide.
 	EncryptionContext map[string]string
 
@@ -123,10 +147,39 @@ type GenerateDataKeyPairInput struct {
 	// in the Key Management Service Developer Guide.
 	GrantTokens []string
 
+	// A signed attestation document (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/nitro-enclave-how.html#term-attestdoc)
+	// from an Amazon Web Services Nitro enclave and the encryption algorithm to use
+	// with the enclave's public key. The only valid encryption algorithm is
+	// RSAES_OAEP_SHA_256 . This parameter only supports attestation documents for
+	// Amazon Web Services Nitro Enclaves. To include this parameter, use the Amazon
+	// Web Services Nitro Enclaves SDK (https://docs.aws.amazon.com/enclaves/latest/user/developing-applications.html#sdk)
+	// or any Amazon Web Services SDK. When you use this parameter, instead of
+	// returning a plaintext copy of the private data key, KMS encrypts the plaintext
+	// private data key under the public key in the attestation document, and returns
+	// the resulting ciphertext in the CiphertextForRecipient field in the response.
+	// This ciphertext can be decrypted only with the private key in the enclave. The
+	// CiphertextBlob field in the response contains a copy of the private data key
+	// encrypted under the KMS key specified by the KeyId parameter. The
+	// PrivateKeyPlaintext field in the response is null or empty. For information
+	// about the interaction between KMS and Amazon Web Services Nitro Enclaves, see
+	// How Amazon Web Services Nitro Enclaves uses KMS (https://docs.aws.amazon.com/kms/latest/developerguide/services-nitro-enclaves.html)
+	// in the Key Management Service Developer Guide.
+	Recipient *types.RecipientInfo
+
 	noSmithyDocumentSerde
 }
 
 type GenerateDataKeyPairOutput struct {
+
+	// The plaintext private data key encrypted with the public key from the Nitro
+	// enclave. This ciphertext can be decrypted only by using a private key in the
+	// Nitro enclave. This field is included in the response only when the Recipient
+	// parameter in the request includes a valid attestation document from an Amazon
+	// Web Services Nitro enclave. For information about the interaction between KMS
+	// and Amazon Web Services Nitro Enclaves, see How Amazon Web Services Nitro
+	// Enclaves uses KMS (https://docs.aws.amazon.com/kms/latest/developerguide/services-nitro-enclaves.html)
+	// in the Key Management Service Developer Guide.
+	CiphertextForRecipient []byte
 
 	// The Amazon Resource Name ( key ARN (https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id-key-ARN)
 	// ) of the KMS key that encrypted the private key.
@@ -142,7 +195,8 @@ type GenerateDataKeyPairOutput struct {
 
 	// The plaintext copy of the private key. When you use the HTTP API or the Amazon
 	// Web Services CLI, the value is Base64-encoded. Otherwise, it is not
-	// Base64-encoded.
+	// Base64-encoded. If the response includes the CiphertextForRecipient field, the
+	// PrivateKeyPlaintext field is null or empty.
 	PrivateKeyPlaintext []byte
 
 	// The public key (in plaintext). When you use the HTTP API or the Amazon Web
@@ -156,6 +210,9 @@ type GenerateDataKeyPairOutput struct {
 }
 
 func (c *Client) addOperationGenerateDataKeyPairMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpGenerateDataKeyPair{}, middleware.After)
 	if err != nil {
 		return err
@@ -164,34 +221,38 @@ func (c *Client) addOperationGenerateDataKeyPairMiddlewares(stack *middleware.St
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "GenerateDataKeyPair"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -200,10 +261,16 @@ func (c *Client) addOperationGenerateDataKeyPairMiddlewares(stack *middleware.St
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = addOpGenerateDataKeyPairValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGenerateDataKeyPair(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -215,6 +282,9 @@ func (c *Client) addOperationGenerateDataKeyPairMiddlewares(stack *middleware.St
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -222,7 +292,6 @@ func newServiceMetadataMiddleware_opGenerateDataKeyPair(region string) *awsmiddl
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "kms",
 		OperationName: "GenerateDataKeyPair",
 	}
 }

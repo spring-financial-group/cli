@@ -89,14 +89,15 @@ func (s PackageTag) String() string {
 //
 // GitLab API docs: https://docs.gitlab.com/ee/api/packages.html
 type PackageFile struct {
-	ID        int         `json:"id"`
-	PackageID int         `json:"package_id"`
-	CreatedAt *time.Time  `json:"created_at"`
-	FileName  string      `json:"file_name"`
-	Size      int         `json:"size"`
-	FileMD5   string      `json:"file_md5"`
-	FileSHA1  string      `json:"file_sha1"`
-	Pipeline  *[]Pipeline `json:"pipelines"`
+	ID         int         `json:"id"`
+	PackageID  int         `json:"package_id"`
+	CreatedAt  *time.Time  `json:"created_at"`
+	FileName   string      `json:"file_name"`
+	Size       int         `json:"size"`
+	FileMD5    string      `json:"file_md5"`
+	FileSHA1   string      `json:"file_sha1"`
+	FileSHA256 string      `json:"file_sha256"`
+	Pipeline   *[]Pipeline `json:"pipelines"`
 }
 
 func (s PackageFile) String() string {
@@ -114,6 +115,7 @@ type ListProjectPackagesOptions struct {
 	Sort               *string `url:"sort,omitempty" json:"sort,omitempty"`
 	PackageType        *string `url:"package_type,omitempty" json:"package_type,omitempty"`
 	PackageName        *string `url:"package_name,omitempty" json:"package_name,omitempty"`
+	PackageVersion     *string `url:"package_version,omitempty" json:"package_version,omitempty"`
 	IncludeVersionless *bool   `url:"include_versionless,omitempty" json:"include_versionless,omitempty"`
 	Status             *string `url:"status,omitempty" json:"status,omitempty"`
 }
@@ -140,7 +142,7 @@ func (s *PackagesService) ListProjectPackages(pid interface{}, opt *ListProjectP
 		return nil, resp, err
 	}
 
-	return ps, resp, err
+	return ps, resp, nil
 }
 
 // ListGroupPackagesOptions represents the available ListGroupPackages()
@@ -181,7 +183,7 @@ func (s *PackagesService) ListGroupPackages(gid interface{}, opt *ListGroupPacka
 		return nil, resp, err
 	}
 
-	return ps, resp, err
+	return ps, resp, nil
 }
 
 // ListPackageFilesOptions represents the available ListPackageFiles()
@@ -217,7 +219,7 @@ func (s *PackagesService) ListPackageFiles(pid interface{}, pkg int, opt *ListPa
 		return nil, resp, err
 	}
 
-	return pfs, resp, err
+	return pfs, resp, nil
 }
 
 // DeleteProjectPackage deletes a package in a project.

@@ -16,6 +16,7 @@ type AuditEvent struct {
 	EntityType string            `json:"entity_type"`
 	Details    AuditEventDetails `json:"details"`
 	CreatedAt  *time.Time        `json:"created_at"`
+	EventType  string            `json:"event_type"`
 }
 
 // AuditEventDetails represents the details portion of an audit event for
@@ -33,6 +34,8 @@ type AuditEventDetails struct {
 	Remove        string      `json:"remove"`
 	CustomMessage string      `json:"custom_message"`
 	AuthorName    string      `json:"author_name"`
+	AuthorEmail   string      `json:"author_email"`
+	AuthorClass   string      `json:"author_class"`
 	TargetID      interface{} `json:"target_id"`
 	TargetType    string      `json:"target_type"`
 	TargetDetails string      `json:"target_details"`
@@ -75,7 +78,7 @@ func (s *AuditEventsService) ListInstanceAuditEvents(opt *ListAuditEventsOptions
 		return nil, resp, err
 	}
 
-	return aes, resp, err
+	return aes, resp, nil
 }
 
 // GetInstanceAuditEvent gets a specific instance audit event.
@@ -96,7 +99,7 @@ func (s *AuditEventsService) GetInstanceAuditEvent(event int, options ...Request
 		return nil, resp, err
 	}
 
-	return ae, resp, err
+	return ae, resp, nil
 }
 
 // ListGroupAuditEvents gets a list of audit events for the specified group
@@ -121,7 +124,7 @@ func (s *AuditEventsService) ListGroupAuditEvents(gid interface{}, opt *ListAudi
 		return nil, resp, err
 	}
 
-	return aes, resp, err
+	return aes, resp, nil
 }
 
 // GetGroupAuditEvent gets a specific group audit event.
@@ -145,7 +148,7 @@ func (s *AuditEventsService) GetGroupAuditEvent(gid interface{}, event int, opti
 		return nil, resp, err
 	}
 
-	return ae, resp, err
+	return ae, resp, nil
 }
 
 // ListProjectAuditEvents gets a list of audit events for the specified project
@@ -170,7 +173,7 @@ func (s *AuditEventsService) ListProjectAuditEvents(pid interface{}, opt *ListAu
 		return nil, resp, err
 	}
 
-	return aes, resp, err
+	return aes, resp, nil
 }
 
 // GetProjectAuditEvent gets a specific project audit event.
@@ -195,5 +198,5 @@ func (s *AuditEventsService) GetProjectAuditEvent(pid interface{}, event int, op
 		return nil, resp, err
 	}
 
-	return ae, resp, err
+	return ae, resp, nil
 }

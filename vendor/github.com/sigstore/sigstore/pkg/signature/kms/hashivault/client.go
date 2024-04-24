@@ -248,7 +248,15 @@ func (h *hashivaultClient) public() (crypto.PublicKey, error) {
 	)
 
 	item := h.keyCache.Get(cacheKey, ttlcache.WithLoader[string, crypto.PublicKey](loader))
-	return item.Value(), lerr
+	if lerr != nil {
+		return nil, lerr
+	}
+
+	if item == nil {
+		return nil, fmt.Errorf("unable to retrieve an item from the cache by the provided key")
+	}
+
+	return item.Value(), nil
 }
 
 func (h hashivaultClient) sign(digest []byte, alg crypto.Hash, opts ...signature.SignOption) ([]byte, error) {

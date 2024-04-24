@@ -4,8 +4,8 @@ package kms
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -68,6 +68,10 @@ import (
 //   - DescribeCustomKeyStores
 //   - DisconnectCustomKeyStore
 //   - UpdateCustomKeyStore
+//
+// Eventual consistency: The KMS API follows an eventual consistency model. For
+// more information, see KMS eventual consistency (https://docs.aws.amazon.com/kms/latest/developerguide/programming-eventual-consistency.html)
+// .
 func (c *Client) CreateCustomKeyStore(ctx context.Context, params *CreateCustomKeyStoreInput, optFns ...func(*Options)) (*CreateCustomKeyStoreOutput, error) {
 	if params == nil {
 		params = &CreateCustomKeyStoreInput{}
@@ -87,7 +91,9 @@ type CreateCustomKeyStoreInput struct {
 
 	// Specifies a friendly name for the custom key store. The name must be unique in
 	// your Amazon Web Services account and Region. This parameter is required for all
-	// custom key stores.
+	// custom key stores. Do not include confidential or sensitive information in this
+	// field. This field may be displayed in plaintext in CloudTrail logs and other
+	// output.
 	//
 	// This member is required.
 	CustomKeyStoreName *string
@@ -174,7 +180,7 @@ type CreateCustomKeyStoreInput struct {
 	//   in the Amazon Web Services account and Region.
 	//   - An external key store with PUBLIC_ENDPOINT connectivity cannot use the same
 	//   XksProxyUriEndpoint value as an external key store with VPC_ENDPOINT_SERVICE
-	//   connectivity in the same Amazon Web Services Region.
+	//   connectivity in this Amazon Web Services Region.
 	//   - Each external key store with VPC_ENDPOINT_SERVICE connectivity must have its
 	//   own private DNS name. The XksProxyUriEndpoint value for external key stores
 	//   with VPC_ENDPOINT_SERVICE connectivity (private DNS name) must be unique in
@@ -218,6 +224,9 @@ type CreateCustomKeyStoreOutput struct {
 }
 
 func (c *Client) addOperationCreateCustomKeyStoreMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateCustomKeyStore{}, middleware.After)
 	if err != nil {
 		return err
@@ -226,34 +235,38 @@ func (c *Client) addOperationCreateCustomKeyStoreMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateCustomKeyStore"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -262,10 +275,16 @@ func (c *Client) addOperationCreateCustomKeyStoreMiddlewares(stack *middleware.S
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
 	if err = addOpCreateCustomKeyStoreValidationMiddleware(stack); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateCustomKeyStore(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -277,6 +296,9 @@ func (c *Client) addOperationCreateCustomKeyStoreMiddlewares(stack *middleware.S
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -284,7 +306,6 @@ func newServiceMetadataMiddleware_opCreateCustomKeyStore(region string) *awsmidd
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "kms",
 		OperationName: "CreateCustomKeyStore",
 	}
 }

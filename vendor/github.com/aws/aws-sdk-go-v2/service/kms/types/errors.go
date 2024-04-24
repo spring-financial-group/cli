@@ -396,6 +396,32 @@ func (e *DisabledException) ErrorCode() string {
 }
 func (e *DisabledException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
+// The request was rejected because the DryRun parameter was specified.
+type DryRunOperationException struct {
+	Message *string
+
+	ErrorCodeOverride *string
+
+	noSmithyDocumentSerde
+}
+
+func (e *DryRunOperationException) Error() string {
+	return fmt.Sprintf("%s: %s", e.ErrorCode(), e.ErrorMessage())
+}
+func (e *DryRunOperationException) ErrorMessage() string {
+	if e.Message == nil {
+		return ""
+	}
+	return *e.Message
+}
+func (e *DryRunOperationException) ErrorCode() string {
+	if e == nil || e.ErrorCodeOverride == nil {
+		return "DryRunOperationException"
+	}
+	return *e.ErrorCodeOverride
+}
+func (e *DryRunOperationException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
+
 // The request was rejected because the specified import token is expired. Use
 // GetParametersForImport to get a new import token and public key, use the new
 // public key to encrypt the key material, and then try the request again.
@@ -1015,9 +1041,9 @@ func (e *UnsupportedOperationException) ErrorCode() string {
 }
 func (e *UnsupportedOperationException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
-// The request was rejected because the ( XksKeyId ) is already associated with a
-// KMS key in this external key store. Each KMS key in an external key store must
-// be associated with a different external key.
+// The request was rejected because the ( XksKeyId ) is already associated with
+// another KMS key in this external key store. Each KMS key in an external key
+// store must be associated with a different external key.
 type XksKeyAlreadyInUseException struct {
 	Message *string
 
@@ -1138,9 +1164,9 @@ func (e *XksProxyIncorrectAuthenticationCredentialException) ErrorFault() smithy
 	return smithy.FaultClient
 }
 
-// The request was rejected because the Amazon VPC endpoint service configuration
-// does not fulfill the requirements for an external key store proxy. For details,
-// see the exception message.
+// The request was rejected because the external key store proxy is not configured
+// correctly. To identify the cause, see the error message that accompanies the
+// exception.
 type XksProxyInvalidConfigurationException struct {
 	Message *string
 
@@ -1197,10 +1223,9 @@ func (e *XksProxyInvalidResponseException) ErrorCode() string {
 }
 func (e *XksProxyInvalidResponseException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
-// The request was rejected because the concatenation of the XksProxyUriEndpoint
-// is already associated with an external key store in the Amazon Web Services
-// account and Region. Each external key store in an account and Region must use a
-// unique external key store proxy address.
+// The request was rejected because the XksProxyUriEndpoint is already associated
+// with another external key store in this Amazon Web Services Region. To identify
+// the cause, see the error message that accompanies the exception.
 type XksProxyUriEndpointInUseException struct {
 	Message *string
 
@@ -1227,9 +1252,9 @@ func (e *XksProxyUriEndpointInUseException) ErrorCode() string {
 func (e *XksProxyUriEndpointInUseException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
 // The request was rejected because the concatenation of the XksProxyUriEndpoint
-// and XksProxyUriPath is already associated with an external key store in the
-// Amazon Web Services account and Region. Each external key store in an account
-// and Region must use a unique external key store proxy API address.
+// and XksProxyUriPath is already associated with another external key store in
+// this Amazon Web Services Region. Each external key store in a Region must use a
+// unique external key store proxy API address.
 type XksProxyUriInUseException struct {
 	Message *string
 
@@ -1286,9 +1311,9 @@ func (e *XksProxyUriUnreachableException) ErrorCode() string {
 func (e *XksProxyUriUnreachableException) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
 // The request was rejected because the specified Amazon VPC endpoint service is
-// already associated with an external key store in the Amazon Web Services account
-// and Region. Each external key store in an Amazon Web Services account and Region
-// must use a different Amazon VPC endpoint service.
+// already associated with another external key store in this Amazon Web Services
+// Region. Each external key store in a Region must use a different Amazon VPC
+// endpoint service.
 type XksProxyVpcEndpointServiceInUseException struct {
 	Message *string
 
@@ -1317,9 +1342,10 @@ func (e *XksProxyVpcEndpointServiceInUseException) ErrorFault() smithy.ErrorFaul
 }
 
 // The request was rejected because the Amazon VPC endpoint service configuration
-// does not fulfill the requirements for an external key store proxy. For details,
-// see the exception message and review the requirements for Amazon VPC endpoint
-// service connectivity for an external key store.
+// does not fulfill the requirements for an external key store. To identify the
+// cause, see the error message that accompanies the exception and review the
+// requirements (https://docs.aws.amazon.com/kms/latest/developerguide/vpc-connectivity.html#xks-vpc-requirements)
+// for Amazon VPC endpoint service connectivity for an external key store.
 type XksProxyVpcEndpointServiceInvalidConfigurationException struct {
 	Message *string
 

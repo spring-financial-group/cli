@@ -88,7 +88,7 @@ func (s *RepositoryFilesService) GetFile(pid interface{}, fileName string, opt *
 		return nil, resp, err
 	}
 
-	return f, resp, err
+	return f, resp, nil
 }
 
 // GetFileMetaDataOptions represents the available GetFileMetaData() options.
@@ -144,7 +144,7 @@ func (s *RepositoryFilesService) GetFileMetaData(pid interface{}, fileName strin
 		}
 	}
 
-	return f, resp, err
+	return f, resp, nil
 }
 
 // FileBlameRange represents one item of blame information.
@@ -174,7 +174,9 @@ func (b FileBlameRange) String() string {
 // GitLab API docs:
 // https://docs.gitlab.com/ee/api/repository_files.html#get-file-blame-from-repository
 type GetFileBlameOptions struct {
-	Ref *string `url:"ref,omitempty" json:"ref,omitempty"`
+	Ref        *string `url:"ref,omitempty" json:"ref,omitempty"`
+	RangeStart *int    `url:"range[start],omitempty" json:"range[start],omitempty"`
+	RangeEnd   *int    `url:"range[end],omitempty" json:"range[end],omitempty"`
 }
 
 // GetFileBlame allows you to receive blame information. Each blame range
@@ -204,7 +206,7 @@ func (s *RepositoryFilesService) GetFileBlame(pid interface{}, file string, opt 
 		return nil, resp, err
 	}
 
-	return br, resp, err
+	return br, resp, nil
 }
 
 // GetRawFileOptions represents the available GetRawFile() options.
@@ -297,7 +299,7 @@ func (s *RepositoryFilesService) CreateFile(pid interface{}, fileName string, op
 		return nil, resp, err
 	}
 
-	return f, resp, err
+	return f, resp, nil
 }
 
 // UpdateFileOptions represents the available UpdateFile() options.
@@ -342,7 +344,7 @@ func (s *RepositoryFilesService) UpdateFile(pid interface{}, fileName string, op
 		return nil, resp, err
 	}
 
-	return f, resp, err
+	return f, resp, nil
 }
 
 // DeleteFileOptions represents the available DeleteFile() options.
